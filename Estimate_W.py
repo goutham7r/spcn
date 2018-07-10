@@ -106,7 +106,7 @@ def Wfast(img,nstains,lamb,num_patches,patchsize,level,background_correction=Fal
 			for k in range(nstains):
 			    Wsource[:,k]=[np.median(WS[:,0,k]),np.median(WS[:,1,k]),np.median(WS[:,2,k])]
 		
-		Wsource = W_sort(normalize_W(Wsource,nstains))
+		Wsource = W_sort(normalize_W(Wsource))
 
 		if Wsource.sum()==0:
 			if patchsize*0.95<100:
@@ -121,106 +121,125 @@ def Wfast(img,nstains,lamb,num_patches,patchsize,level,background_correction=Fal
 		print "No suitable patches found for learning W. Please relax constraints"
 		return None,None
 
+#defines validity of patch for W-estimation
+#valid if percentage of white pixels is less than threshold
+#can be customized as per needs
 def patch_Valid(patch,threshold):
-	r_th=220
-	g_th=220
-	b_th=220
+	r_th=220 #red channel threhold for white pixels
+	g_th=220 #green channel threhold for white pixels
+	b_th=220 #blue channel threhold for white pixels
+	
 	tempr = patch[:,:,0]>r_th
 	tempg = patch[:,:,1]>g_th
 	tempb = patch[:,:,2]>b_th
+	
+	#mask for white pixels
 	temp = tempr*tempg*tempb
-	r,c = np.shape((temp)) 
-	prob= float(np.sum(temp))/float((r*c))
-	#print prob
-	if prob>threshold:
+	
+	r,c = np.shape((temp))
+	#percentage of white pixels in patch 
+	per= float(np.sum(temp))/float((r*c))
+	
+	if per>threshold:
 		return False
 	else:
 		return True  
 
+#Sorts the columns of the color basis matrix such that the first column is H, second column is E.
 def W_sort(W):
-	# All sorting done such that first column is H, second column is E
-	# print W
+
+	# 1. Using r values of the vectors. E must have a smaller value of r (as it is redder) than H.
+	# 2. Using b values of the vectors. H must have a smaller value of b (as it is bluer) than E.
+	# 3. Using r-b values of the vectors. H must have a larger value of r-b.
 
 	method = 3
+	# Choose whichever method works best for your images
 
 	if method==1:
-		# 1. Using r values of the vectors. E must have a smaller value of r (as it is redder) than H
 		W = W[:,np.flipud(W[0,:].argsort())]
+
 	elif method==2:
-		# 2. Using b values of the vectors. H must have a smaller value of b (as it is bluer) than E
 		W = W[:,W[2,:].argsort()]
+
 	elif method==3:
-		# 3. Using r/b ratios of the vectors. H must have a larger value of r/b.
-		r_b_1 = W[0][0]/W[2][0]
-		r_b_2 = W[0][1]/W[2][1]
-		# print r_b_1, r_b_2
-		if r_b_1<r_b_2: #else no need to switch
-			W[:,[0, 1]] = W[:,[1, 0]]
-	elif method==4:
-		# 4. Using r-b values of the vectors. H must have a larger value of r-b.
-		# This is equivalent to comparing the ratios of e^(-r)/e^(-b)
 		r_b_1 = W[0][0]-W[2][0]
 		r_b_2 = W[0][1]-W[2][1]
-		# print r_b_1, r_b_2
-		if r_b_1<r_b_2: #else no need to switch
-			Wsource[:,[0, 1]] = Wsource[:,[1, 0]]
+		if r_b_1<r_b_2: 
+			[:,[0, 1]] = W[:,[1, 0]]
+		#else no need to switch
 
 	return W
 
-def BLtrans(Ivecd,i_0):
-	Ivecd = vectorise(Ivecd)
+#Beer-Lambert transform function
+#I: array of pixel intensities, i_0: background intensities
+def BLtrans(I,i_0):
+	#flatten 3D array
+	Ivecd = vectorise(I)
+
+	#V=WH, +1 is to avoid divide by zero
 	V=np.log(i_0)- np.log(Ivecd+1.0)
+	#shape of V = no. of pixels x 3 
+
+	#thresholding white pixel checking
 	w_threshold=220
 	c = (Ivecd[:,0]<w_threshold) * (Ivecd[:,1]<w_threshold) * (Ivecd[:,2]<w_threshold)
+	
+	#extract only non-white pixels
 	Ivecd=Ivecd[c]
-	VforW=np.log(i_0)- np.log(Ivecd+1.0) #V=WH, +1 is to avoid divide by zero
-	#shape of V = no. of pixels x 3 
+	#BL transform of non-white pixels only
+	VforW=np.log(i_0)- np.log(Ivecd+1.0) 
+	
 	return V,VforW
 
+#function for dictionary learning
+#I:patch for W estimation, param: DL parameters, i_0: background intensities
 def getstainMat(I,param,i_0):
-	#I : Patch for W estimation
-	V,VforW=BLtrans(I,i_0)   #Beer-Lambert law
-	#step 2: Sparse NMF factorization (Learning W; V=WH)
+	#Beer-Lambert transform
+	V,VforW=BLtrans(I,i_0)
+
 	out = suppress_stdout()
+
+	#Sparse NMF (Learning W; V=WH)
+	#W is learnt only using VforW, i.e. by ignoring the white pixels
+	#change VforW to V for W-estimation using all pixels
 	Ws = spams.trainDL(np.asfortranarray(np.transpose(VforW)),**param)
+	
 	suppress_stdout(out)
+
 	return Ws
 
-def normalize_W(W,k):
+#makes the columns of the color basis matrix W unit norm
+def normalize_W(W):
 	W1 = preprocessing.normalize(W, axis=0, norm='l2')
 	return W1
 
+#defines parameters for dictionary learning	
 def definePar(nstains,lamb,batch=None):
-
 	param={}	
-	#param['mode']=2               #solves for =min_{D in C} (1/n) sum_{i=1}^n (1/2)||x_i-Dalpha_i||_2^2 + ... 
-								   #lambda||alpha_i||_1 + lambda_2||alpha_i||_2^2
 	param['lambda1']=lamb
-	#param['lambda2']=0.05
 	param['posAlpha']=True         #positive stains 
 	param['posD']=True             #positive staining matrix
 	param['modeD']=0               #{W in Real^{m x n}  s.t.  for all j,  ||d_j||_2^2 <= 1 }
 	param['whiten']=False          #Do not whiten the data                      
-	param['K']=nstains             #No. of stain = 2
+	param['K']=nstains             #No. of stains = 2 for H&E
 	param['numThreads']=-1         #number of threads
-	param['iter']=40               #20-50 is OK
+	param['iter']=40               #20-50 is fine
 	param['clean']=True
 	if batch is not None:
 		param['batchsize']=batch   #Give here input image no of pixels for traditional dictionary learning
 	return param
 
+#flattens 3D array of pixel intensities of size (l,b,3) into 2D array of size ((l*b),3) 
 def vectorise(I):
 	s=I.shape
-	if len(s)==2: #case for 2D array
-		third_dim=1
-	else:
-		third_dim=s[2] 
-	return np.reshape(I, (s[0]*s[1],third_dim))
+	return np.reshape(I, (s[0]*s[1],s[2]))
 
+#auxiliary function to improve functionality of parallel pool functions used
 def initializer():
-    """Ignore CTRL+C in the worker process."""
+    #Ignore CTRL+C in the worker process
     signal.signal(signal.SIGINT, signal.SIG_IGN)
 
+#auxiliary function to improve functionality of parallel pool functions used
 def suppress_stdout(out=None):
 	if out is None:
 		devnull = open('/dev/null', 'w')

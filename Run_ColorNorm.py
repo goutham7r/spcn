@@ -265,13 +265,12 @@ def run_batch_colornorm(filenames,nstains,lamb,output_direc,img_level,background
 	session1.close()
 
 
-
-def run_colornorm(source_filename,target_filename,nstains,lamb,output_direc,level,background_correction=False,config=None):	
+#Normalization of single source image with target image
+def run_colornorm(source_filename,target_filename,nstains,lamb,output_direc,level,background_correction,config=None):	
 	filenames=[target_filename,source_filename]
 	run_batch_colornorm(filenames,nstains,lamb,output_direc,level,background_correction,config)
 
-
-
+#auxiliary function for verbosity
 def display_separator():
 	print "________________________________________________________________________________________________"
 	print

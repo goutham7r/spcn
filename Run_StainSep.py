@@ -8,14 +8,12 @@ import openslide
 from PIL import Image
 Image.MAX_IMAGE_PIXELS = None
 
-from Estimate_W import Wfast
+from Estimate_W import Wfast,BLtrans
 
-def run_stainsep(filename,nstains,lamb,output_direc="",background_correction=True):
+def run_stainsep(filename,nstains,lamb,level,output_direc,background_correction):
 	
 	print 
 	print "Running stain separation on:",filename
-
-	level=0
 
 	I = openslide.open_slide(filename)
 	xdim,ydim=I.level_dimensions[level]
@@ -23,8 +21,6 @@ def run_stainsep(filename,nstains,lamb,output_direc="",background_correction=Tru
 
 	print "Fast stain separation is running...."
 	Wi,Hi,Hiv,stains=Faststainsep(I,img,nstains,lamb,level,background_correction)
-
-	print "\t \t \t \t \t \t Time taken:",elapsed
 
 	print "Color Basis Matrix:\n",Wi
 
