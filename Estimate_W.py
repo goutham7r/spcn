@@ -165,7 +165,7 @@ def W_sort(W):
 		r_b_1 = W[0][0]-W[2][0]
 		r_b_2 = W[0][1]-W[2][1]
 		if r_b_1<r_b_2: 
-			[:,[0, 1]] = W[:,[1, 0]]
+			W[:,[0, 1]] = W[:,[1, 0]]
 		#else no need to switch
 
 	return W
