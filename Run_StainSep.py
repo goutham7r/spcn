@@ -8,8 +8,7 @@ import openslide
 from PIL import Image
 Image.MAX_IMAGE_PIXELS = None
 
-from Estimate_W import Wfast
-from Estimate_W import BLtrans
+from Estimate_W import Wfast,BLtrans
 
 def run_stainsep(filename,nstains,lamb,output_direc="",background_correction=True):
 	
